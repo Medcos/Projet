@@ -1,15 +1,17 @@
-# %% [markdown]
+#!/usr/bin/env python
+# coding: utf-8
+
 # ## Importation des librairies
 
-# %%
+# In[2]:
 
 
-# %%
 import numpy as np
 import pandas as pd
 import gc
 import time
 import re
+import os
 from contextlib import contextmanager
 from lightgbm import LGBMClassifier
 from sklearn.metrics import roc_auc_score, roc_curve
@@ -19,17 +21,24 @@ import seaborn as sns
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-# %%
+
+# In[3]:
+
+
 @contextmanager
 def timer(title):
     t0 = time.time()
     yield
     print("{} - done in {:.0f}s".format(title, time.time() - t0))
 
-# %% [markdown]
-# ### Le codage one-hot sur les colonnes catégorielles de la DataFrame
 
-# %%
+# ## Transformation des données 
+
+# ### Encodage one-hot sur les colonnes catégorielles
+
+# In[6]:
+
+
 def one_hot_encoder(df, nan_as_category = True):
     original_columns = list(df.columns)
     categorical_columns = [col for col in df.columns if df[col].dtype == 'object']
@@ -39,32 +48,32 @@ def one_hot_encoder(df, nan_as_category = True):
     new_columns = [c for c in df.columns if c not in original_columns]
     return df, new_columns
 
-# %% [markdown]
-# ## Prétraitement des données
 
-# %%
-df = pd.read_csv(r"C:\Users\dmedc\Documents\DATA SCIENCE\PROJET\Projet 7\data\application_train.csv")
-test_df = pd.read_csv(r"C:\Users\dmedc\Documents\DATA SCIENCE\PROJET\Projet 7\data\application_test.csv")
-print("Train samples: {}, test samples: {}".format(len(df), len(test_df)))
-df = df.append(test_df).reset_index()
-
-# %%
-df.head()
-
-# %%
-df.shape
-
-# %% [markdown]
-# 
 # ### 2.1) application_train.csv and application_test.csv
 
-# %%
+# In[8]:
+
+
+train_df = pd.read_csv(os.path.join(os.getcwd(), 'data', 'application_train.csv'))
+train_df.head()
+
+
+# In[9]:
+
+
+test_df = pd.read_csv(os.path.join(os.getcwd(), 'data', 'application_test.csv'))
+test_df.head()
+
+
+# In[10]:
+
+
 def application_train_test(num_rows = None, nan_as_category = False):
     # Read data and merge
-    df = pd.read_csv(r"C:\Users\dmedc\Documents\DATA SCIENCE\PROJET\Projet 7\data\application_train.csv", nrows= num_rows)
-    test_df = pd.read_csv(r"C:\Users\dmedc\Documents\DATA SCIENCE\PROJET\Projet 7\data\application_test.csv", nrows= num_rows)
-    print("Train samples: {}, test samples: {}".format(len(df), len(test_df)))
-    df = df.append(test_df).reset_index()
+    train_df = pd.read_csv(os.path.join(os.getcwd(), 'data', 'application_train.csv'), nrows= num_rows)
+    test_df = pd.read_csv(os.path.join(os.getcwd(), 'data', 'application_test.csv'), nrows= num_rows)
+    print("Train samples: {}, test samples: {}".format(len(train_df), len(test_df)))
+    df = pd.concat([train_df, test_df]).reset_index(drop=True)
     
     # Optional: 
     df = df[df['CODE_GENDER'] != 'XNA']
@@ -89,17 +98,23 @@ def application_train_test(num_rows = None, nan_as_category = False):
     gc.collect()
     return df
 
-# %%
+
+# In[11]:
+
+
 df = application_train_test()
 df.head(3)
 
-# %% [markdown]
+
 # ### 2.2) bureau.csv and bureau_balance.csv
 
-# %%
+# In[13]:
+
+
 def bureau_and_balance(num_rows = None, nan_as_category = True):
-    bureau = pd.read_csv(r"C:\Users\dmedc\Documents\DATA SCIENCE\PROJET\Projet 7\data\bureau.csv", nrows = num_rows)
-    bb = pd.read_csv(r"C:\Users\dmedc\Documents\DATA SCIENCE\PROJET\Projet 7\data\bureau_balance.csv", nrows = num_rows)
+    bureau = pd.read_csv(os.path.join(os.getcwd(), 'data', 'bureau.csv'), nrows= num_rows)
+    bb = pd.read_csv(os.path.join(os.getcwd(), 'data', 'bureau_balance.csv'), nrows= num_rows)
+    
     bb, bb_cat = one_hot_encoder(bb, nan_as_category)
     bureau, bureau_cat = one_hot_encoder(bureau, nan_as_category)
     
@@ -161,16 +176,21 @@ def bureau_and_balance(num_rows = None, nan_as_category = True):
     gc.collect()
     return bureau_agg
 
-# %%
+
+# In[14]:
+
+
 bureau_agg = bureau_and_balance()
 bureau_agg.head(3)
 
-# %% [markdown]
+
 # ### 2.3) previous_applications.csv
 
-# %%
+# In[16]:
+
+
 def previous_applications(num_rows = None, nan_as_category = True):
-    prev = pd.read_csv(r"C:\Users\dmedc\Documents\DATA SCIENCE\PROJET\Projet 7\data\previous_application.csv", nrows = num_rows)
+    prev = pd.read_csv(os.path.join(os.getcwd(), 'data', 'previous_application.csv'), nrows = num_rows)
     prev, cat_cols = one_hot_encoder(prev, nan_as_category= True) # Applique un encodage one-hot aux colonnes catégorielles du DataFrame
     # Days 365.243 values -> nan
     prev['DAYS_FIRST_DRAWING'].replace(365243, np.nan, inplace= True) # Remplace les valeurs "365243" par NaN dans certaines colonnes 
@@ -230,16 +250,21 @@ def previous_applications(num_rows = None, nan_as_category = True):
     gc.collect()
     return prev_agg
 
-# %%
+
+# In[17]:
+
+
 prev_agg = previous_applications()
 prev_agg.head(3)
 
-# %% [markdown]
+
 # ### 2.4) POS_CASH_balance.csv
 
-# %%
+# In[19]:
+
+
 def pos_cash(num_rows = None, nan_as_category = True):
-    pos = pd.read_csv(r"C:\Users\dmedc\Documents\DATA SCIENCE\PROJET\Projet 7\data\POS_CASH_balance.csv")
+    pos = pd.read_csv(os.path.join(os.getcwd(), 'data', 'POS_CASH_balance.csv'))
     pos, cat_cols = one_hot_encoder(pos, nan_as_category= True)
     # Features
     aggregations = {
@@ -259,16 +284,21 @@ def pos_cash(num_rows = None, nan_as_category = True):
     gc.collect()
     return pos_agg
 
-# %%
+
+# In[20]:
+
+
 pos_agg = pos_cash()
 pos_agg.head(3)
 
-# %% [markdown]
+
 # ### 2.5)  installments_payments.csv
 
-# %%
+# In[22]:
+
+
 def installments_payments(num_rows = None, nan_as_category = True):
-    ins = pd.read_csv(r"C:\Users\dmedc\Documents\DATA SCIENCE\PROJET\Projet 7\data\installments_payments.csv", nrows = num_rows)
+    ins = pd.read_csv(os.path.join(os.getcwd(), 'data', "installments_payments.csv"), nrows = num_rows)
     ins, cat_cols = one_hot_encoder(ins, nan_as_category= True)
     # Percentage and difference paid in each installment (amount paid and installment value)
     ins['PAYMENT_PERC'] = ins['AMT_PAYMENT'] / ins['AMT_INSTALMENT']
@@ -301,16 +331,21 @@ def installments_payments(num_rows = None, nan_as_category = True):
     gc.collect()
     return ins_agg
 
-# %%
+
+# In[23]:
+
+
 ins_agg = installments_payments()
 ins_agg.head(3)
 
-# %% [markdown]
+
 # ### 2.6) credit_card_balance.csv
 
-# %%
+# In[25]:
+
+
 def credit_card_balance(num_rows = None, nan_as_category = True):
-    cc = pd.read_csv(r"C:\Users\dmedc\Documents\DATA SCIENCE\PROJET\Projet 7\data\credit_card_balance.csv", nrows = num_rows)
+    cc = pd.read_csv(os.path.join(os.getcwd(), 'data', "credit_card_balance.csv"), nrows = num_rows)
     cc, cat_cols = one_hot_encoder(cc, nan_as_category= True)
     # General aggregations
     cc.drop(['SK_ID_PREV'], axis= 1, inplace = True)
@@ -324,32 +359,43 @@ def credit_card_balance(num_rows = None, nan_as_category = True):
     gc.collect()
     return cc_agg
 
-# %%
+
+# In[26]:
+
+
 cc_agg = credit_card_balance()
 cc_agg.head(3)
 
-# %% [markdown]
-# ## Préparation des données
 
-# %% [markdown]
+# ## Consolidation des données
+
 # ### 3.1) La consolidation des informations importantes sur le client
 
-# %%
-df = pd.read_csv(r"C:\Users\dmedc\Documents\DATA SCIENCE\PROJET\Projet 7\data\application_train.csv")
-test_df = pd.read_csv(r"C:\Users\dmedc\Documents\DATA SCIENCE\PROJET\Projet 7\data\application_test.csv")
+# In[29]:
+
+
+df = pd.read_csv(os.path.join(os.getcwd(), 'data', "application_train.csv"))
+test_df = pd.read_csv(os.path.join(os.getcwd(), 'data', "application_test.csv"))
 df = pd.concat([df, test_df]).reset_index()
 
-df = df.loc[:, ['SK_ID_CURR', 'NAME_CONTRACT_TYPE', 'CODE_GENDER','CNT_CHILDREN', 'CNT_FAM_MEMBERS', 'AMT_INCOME_TOTAL', 'AMT_CREDIT']]
+df = df.loc[:, ['SK_ID_CURR', 'DAYS_BIRTH', 'CODE_GENDER','CNT_CHILDREN', 'CNT_FAM_MEMBERS', 'FLAG_OWN_CAR', 'FLAG_OWN_REALTY', 'REGION_POPULATION_RELATIVE', 'NAME_CONTRACT_TYPE', 'AMT_INCOME_TOTAL', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_GOODS_PRICE']]
 df.head(3)
 
-# %%
-# Exporter le fichier
-df.to_csv(".\info_clients.csv", index=False)
 
-# %% [markdown]
+# In[30]:
+
+
+# Exporter le fichier
+df.to_csv("./info_clients.csv", index=False)
+
+
 # ### 3.2) La consolidation des données transformées
 
-# %%
+# #### 3.2.1) Les données transformées consolidées
+
+# In[33]:
+
+
 def main(debug = False):
     num_rows = 10000 if debug else None
     df = application_train_test(num_rows)
@@ -388,48 +434,171 @@ def main(debug = False):
         print("DataFrame Final df:", df.shape)
     return df
 
-# %%
+
+# In[34]:
+
+
 df = main()
 
-# %%
+
+# In[35]:
+
+
 df.head(3)
 
-# %%
-# # Exporter le fichier
-# df.to_csv(".\data.csv",index=False)
 
-# %% [markdown]
-# ### 3.3) La Séparation des données X, y
+# ### 3.2.2) Analyse des données transformées
 
-# %%
-data = pd.read_csv(".\data.csv")
-# Réduire au dixième la taille de nos données
-df = data.sample(frac=0.1)
+# In[37]:
 
-# %%
+
+df.info()
+
+
+# In[38]:
+
+
+print("Nombre de NaN : {}".format(df.isnull().sum().sum()))
+
+
+# In[39]:
+
+
+# Sélectionner uniquement les colonnes numériques
+numeric_df = df.select_dtypes(include=[np.number])
+# Calculer le nombre total de valeurs infinies
+print("Nombre de infinie : {}".format(np.isinf(numeric_df).sum().sum()))
+
+
+# #### 3.2.3) La Séparation des données train_df et test_df
+
+# In[41]:
+
+
 train_df = df[df['TARGET'].notnull()]
 test_df = df[df['TARGET'].isnull()]
 print("Starting LightGBM. Train shape: {}, test shape: {}".format(train_df.shape, test_df.shape))
 
-# %%
-# Séparer les caractéristiques et la variable cible
-feats = [f for f in train_df.columns if f not in ['TARGET','SK_ID_CURR','SK_ID_BUREAU','SK_ID_PREV','index']]
-X = train_df[feats]
-y = train_df['TARGET']
 
-# %%
-print("Nbre NaN de X: {}, Nbre NaN de y: {}".format(X.isnull().sum().sum(), y.isnull().sum().sum()))
+# In[42]:
 
-# %%
-# Remplacer les NaN par la moyenne de chaque colonne
-X = X.fillna(X.mean())
-# Replacer les infinite values par a large finite number
-X = X.replace([np.inf, -np.inf], 1e9)
 
-# %% [markdown]
+# Exporter le fichier
+test_df.to_csv("./data_test.csv",index=False)
+
+
+# ## Preprocessing
+
+# In[44]:
+
+
+# Réduire au dixième la taille de nos données
+df = train_df.sample(frac=0.1)
+
+
+# #### 3.4.1) Features et target
+
+# In[46]:
+
+
+# # Remplacer np.inf et -np.inf 
+# df.replace({np.inf: 1.e9, -np.inf: -1e9}, inplace=True)
+
+
+# In[47]:
+
+
+# # Séparer les caractéristiques et la variable cible
+# feats = [f for f in train_df.columns if f not in ['TARGET','SK_ID_CURR','SK_ID_BUREAU','SK_ID_PREV','index']]
+# X = train_df[feats]
+# y = train_df['TARGET']
+
+
+# In[48]:
+
+
+def prepare_data(df):
+    # Remplacer np.inf et -np.inf
+    df.replace({np.inf: 1.e9, -np.inf: -1.e9}, inplace=True)
+    
+    # Séparer les caractéristiques et la variable cible
+    feats = [f for f in df.columns if f not in ['TARGET', 'SK_ID_CURR', 'SK_ID_BUREAU', 'SK_ID_PREV', 'index']]
+    X = df[feats]
+    y = df['TARGET']
+    
+    return X, y
+
+
+# In[49]:
+
+
+X, y = prepare_data(df)
+
+
+# #### 3.4.2) Imputation de données
+
+# In[51]:
+
+
+# Remplacer NaN
+from sklearn.impute import SimpleImputer
+
+imputer = SimpleImputer(missing_values=np.nan, strategy='mean')
+# Fit and transform the data
+imputed_data = imputer.fit_transform(X)
+
+# Convert back to DataFrame
+X_imputed = pd.DataFrame(imputed_data, columns=X.columns)
+print("Nombre de NaN : {}".format(X_imputed.isnull().sum().sum()))
+
+
+# In[52]:
+
+
+X_imputed.head(3)
+
+
+# #### 3.4.3) Normalisation des données
+
+# In[54]:
+
+
+from sklearn.preprocessing import MinMaxScaler
+
+# Création du scaler
+scaler = MinMaxScaler()
+
+# Ajuster et transformer les données
+normalized_data = scaler.fit_transform(X_imputed)
+
+# Convertir en DataFrame 
+X_normalized = pd.DataFrame(normalized_data, columns=X_imputed.columns)
+
+
+# #### 3.4.4) Création de pipeline de preprocessing
+
+# In[56]:
+
+
+from sklearn.pipeline import Pipeline
+pipeline = Pipeline(steps=[
+    ('imputer', imputer),
+    ('scaler', scaler)
+])
+
+
 # ## Modélisation LightGBM GBDT with KFold or Stratified KFold
 
-# %%
+# In[58]:
+
+
+X = X_normalized
+feats = X.columns
+
+
+# In[59]:
+
+
 # Définir le nombre de folds pour la validation croisée
 num_folds = 5
 stratified = False
@@ -440,13 +609,14 @@ if stratified:
 else:
     folds = KFold(n_splits= num_folds, shuffle=True, random_state=1001)
 
-# %% [markdown]
+
 # ### 4.1) Modèle avec déséquilibre des classe
 
-# %% [markdown]
 # #### algorithme
 
-# %%
+# In[62]:
+
+
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score
 
@@ -496,17 +666,22 @@ for n_fold, (train_idx, valid_idx) in enumerate(folds.split(X, y)):
     del train_x, train_y, valid_x, valid_y
     gc.collect()
 
-# %% [markdown]
+
 # #### Evaluation
 
-# %%
+# In[64]:
+
+
 AUC = roc_auc_score(y, oof_preds)
 Accuracy = accuracy_score(y, y_pred)
 
 print('Full AUC score %.6f' % AUC)
 print('Full Accuracy score %.6f' % Accuracy)
 
-# %%
+
+# In[65]:
+
+
 from sklearn.metrics import confusion_matrix
 
 # Calculer la matrice de confusion
@@ -514,25 +689,33 @@ cm = confusion_matrix(y, y_pred)
 
 # Afficher la matrice de confusion
 plt.figure(figsize=(4, 4))
-sns.heatmap(cm, annot=True, cmap='Blues', fmt='g')
+sns.heatmap(cm, annot=True, cmap='Reds', fmt='g')
 plt.title('Matrice de confusion')
 plt.xlabel('Prédiction')
 plt.ylabel('Vraie valeur')
 plt.show()
 
-# %% [markdown]
+
 # ### 4.2) Modèle avec l'équilibrage des données par SMOTE 
 
-# %%
+# In[67]:
+
+
 # Sélection des lignes avec des valeurs infinies
 rows_with_inf = df[df.isin([np.inf, -np.inf]).any(axis=1)]
 
-# %%
+
+# In[68]:
+
+
 from imblearn.pipeline import Pipeline
 from imblearn.over_sampling import SMOTE
 from collections import Counter
 
-# %%
+
+# In[69]:
+
+
 from imblearn.over_sampling import SMOTE
 
 # Instancier l'objet SMOTE
@@ -553,7 +736,10 @@ print("Avant SMOTE X:", X_smote.shape[0])
 print("Avant SMOTE y :", Counter(y))
 print("Après SMOTE y:", Counter(y_smote))
 
-# %%
+
+# In[70]:
+
+
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score
 
@@ -604,17 +790,21 @@ for n_fold, (train_idx, valid_idx) in enumerate(folds.split(X, y)):
     gc.collect()
 
 
-# %% [markdown]
 # #### Evaluation
 
-# %%
+# In[72]:
+
+
 AUC_smote = roc_auc_score(y, oof_preds)
 Accuracy_smote = accuracy_score(y, y_pred)
 
 print('Full AUC score %.6f' % AUC_smote)
 print('Full Accuracy score %.6f' % Accuracy_smote)
 
-# %%
+
+# In[73]:
+
+
 from sklearn.metrics import confusion_matrix
 
 # Calculer la matrice de confusion
@@ -622,16 +812,18 @@ cm = confusion_matrix(y, y_pred)
 
 # Afficher la matrice de confusion
 plt.figure(figsize=(4, 4))
-sns.heatmap(cm, annot=True, cmap='Blues', fmt='g')
+sns.heatmap(cm, annot=True, cmap='Greens', fmt='g')
 plt.title('Matrice de confusion')
 plt.xlabel('Prédiction')
 plt.ylabel('Vraie valeur')
 plt.show()
 
-# %% [markdown]
+
 # ### 4.3) Modèle par Implémentation d'un score métier pour prioriser le FN
 
-# %%
+# In[75]:
+
+
 import lightgbm as lgb
 from sklearn.metrics import make_scorer
 
@@ -639,10 +831,12 @@ from sklearn.metrics import make_scorer
 cost_fp = 1.0
 cost_fn = 10.0
 
-# %% [markdown]
+
 # #### algorithme
 
-# %%
+# In[77]:
+
+
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score
 
@@ -698,17 +892,22 @@ for n_fold, (train_idx, valid_idx) in enumerate(folds.split(X, y)):
     del train_x, train_y, valid_x, valid_y
     gc.collect()
 
-# %% [markdown]
+
 # #### Evaluation
 
-# %%
+# In[79]:
+
+
 AUC_FN = roc_auc_score(y, oof_preds)
 Accuracy_FN = accuracy_score(y, y_pred)
 
 print('Full AUC score %.6f' % AUC_FN)
 print('Full Accuracy score %.6f' % Accuracy_FN)
 
-# %%
+
+# In[80]:
+
+
 from sklearn.metrics import confusion_matrix
 
 # Calculer la matrice de confusion
@@ -722,10 +921,12 @@ plt.xlabel('Prédiction')
 plt.ylabel('Vraie valeur')
 plt.show()
 
-# %% [markdown]
+
 # ## Tableau  d'évaluation des  performances 
 
-# %%
+# In[82]:
+
+
 Performance_Table = pd.DataFrame({
     
     'Métrique' : ['AUC', 'Acuuracy'],
@@ -737,32 +938,57 @@ Performance_Table = pd.DataFrame({
 Performance_Table
 
 
+# In[83]:
+
+
+model = clf_smote
+
+
 # ## Feature Importance
 
-# %%
-cols = feature_importance_df_smote[["feature", "importance"]].groupby("feature").mean().sort_values(by="importance", ascending=False)[:10].index
-best_features = feature_importance_df_smote.loc[feature_importance_df.feature_smote.isin(cols)]
+# In[85]:
+
+
+# Obtenir les 10 meilleures caractéristiques
+cols = feature_importance_df_smote[["feature", "importance"]] \
+    .groupby("feature") \
+    .mean() \
+    .sort_values(by="importance", ascending=False) \
+    .head(10) \
+    .index
+
+# Filtrer le DataFrame pour obtenir les meilleures caractéristiques
+# Remplacez 'feature' par le nom correct de la colonne dans feature_importance_df_smote
+best_features = feature_importance_df_smote[feature_importance_df_smote['feature'].isin(cols)]
+
+# Visualiser les meilleures caractéristiques
 plt.figure(figsize=(20, 10))
 sns.barplot(x="importance", y="feature", data=best_features.sort_values(by="importance", ascending=False))
 plt.title('LightGBM Features (avg over folds)')
-plt.tight_layout()
+plt.show()
 
-# %% [markdown]
+
 # ## Enregistrement du modèle en local avec MLflow
 
-# %%
+# In[88]:
+
+
 import mlflow
 import mlflow.lightgbm
 
 # Démarrer une nouvelle exécution MLflow
 with mlflow.start_run():
     # Chemin d'accès local où vous souhaitez enregistrer le modèle
-    local_path = r"C:\Users\dmedc\Documents\DATA SCIENCE\PROJET\Projet 7\kernel\modele"
+    local_path = os.path.join(os.getcwd(), "modele")
+    local_path_pre = os.path.join(os.getcwd(), "preprocessing")
     
     # Stocker le modèle avec MLflow en local
-    #mlflow.sklearn.save_model(clf_smote, local_path)
     mlflow.lightgbm.log_model(model, "model")
     mlflow.lightgbm.save_model(model, local_path)
-    print(f"Modèle enregistré localement à l'emplacement {local_path}")
 
+    # Enregistrer le pipeline dans MLflow
+    mlflow.sklearn.log_model(pipeline,"preprocessing")
+    mlflow.sklearn.save_model(pipeline, local_path_pre)
+    
+    print(f"Modèle et pipeline enregistrés localement à l'emplacement {local_path}")
 
